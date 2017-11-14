@@ -25,7 +25,7 @@ class hivewritePlus extends pezyhivewriteif{
 
   var conf = HBaseConfiguration.create()
 
-  var table = new HTable(conf,"")
+  var prewrite = false;
 
   def initHbase(properties: Properties) = {
 
@@ -35,14 +35,20 @@ class hivewritePlus extends pezyhivewriteif{
     val zk = properties.get("zk").toString.split(":")
     val zkport = zk(0)
     val zkquorum = zk(1)
+    println("===================="+hbaseTableName+"================")
+    println("===================="+zkport+"================")
+    println("===================="+zkquorum+"================")
 
-    if(table.getConnection==None){
+    val table =if(prewrite!=true){
+      println("====================222222222222222================")
       conf.set("hbase.zookeeper.property.clientPort", zkport)
       conf.set("hbase.zookeeper.quorum", zkquorum)
       conf.set(TableOutputFormat.OUTPUT_TABLE, hbaseTableName)
-      table = new HTable(conf,hbaseTableName)
+      var table = new HTable(conf,hbaseTableName)
+      prewrite = true
+      table
     }
-    (table, columns)
+    (table,columns)
   }
   def initKakfa(properties: Properties)={
     val outputzkQuorum = properties.get("outputzkQuorum").toString
@@ -58,13 +64,13 @@ class hivewritePlus extends pezyhivewriteif{
 
     val properties = tableDesc.getProperties
     println(properties)
-    if(properties.get("outputdatasource").toString.equals("kafka")){
+    /*if(properties.get("outputdatasource").toString.equals("kafka")){
       val props = initKakfa(properties)
       val outputtopics = properties.get("outputtopics").toString
       val r = row.toString
       sendMessageTokafka(props,outputtopics,r)
-    }else{
-      val (table, columns) = initHbase(properties)
+    }else{*/
+      val (table:HTable, columns) = initHbase(properties)
       //iterator.foreach{ row => {
       var i = 0
       var j = 1
@@ -80,11 +86,11 @@ class hivewritePlus extends pezyhivewriteif{
         j +=1
       }
       table.put(put)
-    }
+   /* }*/
   }
 
   def pezyclose() : Unit = {
-    table.close()
+    /*table.close()*/
   }
 
   def sendMessageTokafka(props:HashMap[String,Object],topic:String,json:String): Unit ={

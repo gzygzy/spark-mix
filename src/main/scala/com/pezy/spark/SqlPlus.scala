@@ -217,7 +217,7 @@ class SqlPlus extends pezyinterface with Logging{
         prop.setProperty("user",user)
         prop.setProperty("password",password)
 
-        val ff = if(par==None){
+        val ff = if(!(par.get=="")){
           sparkSession.sqlContext.read.jdbc(url,tName.get,part,prop)
         }else{
           sparkSession.sqlContext.read.format("jdbc").options(Map("url" -> url,"user" -> user,"password" -> password
