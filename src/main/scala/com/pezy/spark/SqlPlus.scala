@@ -10,8 +10,9 @@ import java.sql.DriverManager
 import java.sql.ResultSet
 import java.sql.Statement
 import java.sql.ResultSetMetaData
-import java.util.Properties
+import java.util.{HashMap, Properties}
 import com.pezy.spark.license.license3j.CheckLicense
+import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.spark.graphx._
 
 import org.apache.spark.mllib.clustering.{KMeansModel, KMeans}
@@ -33,6 +34,16 @@ class SqlPlus extends pezyinterface with Logging{
     val checkLicense = new CheckLicense
     val licenseResult = checkLicense.checkResult()
     /*sparkSession.sessionState.conf.setConfString("engine","phoenix")*/
+    val map = sparkSession.sqlContext.getAllConfs
+    val flag = map.keys.exists(fg =>
+    if(fg.toString == "fg"){
+      true
+    }else{
+      false
+    })
+    if (flag){
+      println(sparkSession.sqlContext.getConf("fg")+"===================")
+    }
 
     if(licenseResult.getResult == true) {
 
@@ -48,10 +59,6 @@ class SqlPlus extends pezyinterface with Logging{
       } else if (sqlText.startsWith("pheonix")) {
         //sqlText.startsWith("phoenix")
         getPhoenixDataFrame(sqlText,sparkSession)
-
-      } else if(sqlText.startsWith("elasticsearch")){
-
-        executorDataforES()
 
       } else{
         analysisJdbc(sqlText,sparkSession)
@@ -178,61 +185,57 @@ class SqlPlus extends pezyinterface with Logging{
 
     try{
       val tableMessage = sparkSession.sharedState.externalCatalog.getTable(dbName,tableName)
+      val tblProperties = tableMessage.properties
+      /*val partition = tableMessage.partitionColumnNames*/
+      //分区依据
+      val ext = tblProperties.get("ext")
 
-    val tblProperties = tableMessage.properties
+      if(ext!=None){
+        val DB = tblProperties.get("DB")
 
-    /*val partition = tableMessage.partitionColumnNames*/
+        val cDB = tblProperties.get("cDB")
 
-    val DB = tblProperties.get("DB")
+        val tName = tblProperties.get("tableName")
 
-    val cDB = tblProperties.get("cDB")
+        val par = tblProperties.get("partition")
+        val myDB = sparkSession.sharedState.externalCatalog.getDatabase(dbName)
+        val dbProperties = myDB.properties
 
-    val tName = tblProperties.get("tableName")
+        var message = new Array[String](3)
 
-    val par = tblProperties.get("partition") //分区依据
-
-    val ext = tblProperties.get("ext")
-
-
-    if(ext!=None){
-      val myDB = sparkSession.sharedState.externalCatalog.getDatabase(dbName)
-      val dbProperties = myDB.properties
-
-      var message = new Array[String](3)
-
-      if(cDB != None){
-        val value = dbProperties.get(cDB.get)
-        println(value.get)
-        if(value != None){
-          message = value.get.split(" ")
+        if(cDB != None){
+          val value = dbProperties.get(cDB.get)
+          println(value.get)
+          if(value != None){
+            message = value.get.split(" ")
+          }
+        }else if(DB != None){
+          val value = dbProperties.get(DB.get)
+          if(value != None){
+            message = value.get.split(" ")
+          }
+        }else{
+          throw new Exception("Unknow jdbc type")
         }
-      }else if(DB != None){
-        val value = dbProperties.get(DB.get)
-        if(value != None){
-          message = value.get.split(" ")
+
+        val url = message(0)
+        val user = message(1)
+        val password = message(2)
+        val part = par.get.split(" ")
+
+        val prop = new Properties()
+        prop.setProperty("user",user)
+        prop.setProperty("password",password)
+
+        val ff = if(!(par.get==" ")){
+          sparkSession.sqlContext.read.jdbc(url,tName.get,part,prop)
+        }else{
+          sparkSession.sqlContext.read.format("jdbc").options(Map("url" -> url,"user" -> user,"password" -> password
+            ,"dbtable" -> tName.get)).load()
         }
-      }else{
-        throw new Exception("Unknow jdbc type")
+        ff.registerPezyTable(dbName,tableName)
       }
 
-      val url = message(0)
-      val user = message(1)
-      val password = message(2)
-      val part = par.get.split(" ")
-
-      val prop = new Properties()
-      prop.setProperty("user",user)
-      prop.setProperty("password",password)
-
-      val ff = if(par==None){
-        sparkSession.sqlContext.read.jdbc(url,tName.get,part,prop)
-      }else{
-        sparkSession.sqlContext.read.format("jdbc").options(Map("url" -> url,"user" -> user,"password" -> password
-          ,"dbtable" -> tName.get)).load()
-      }
-      ff.registerPezyTable(dbName,tableName)
-
-    }
     }catch {
       case ex : Exception =>{
         return
@@ -298,11 +301,6 @@ class SqlPlus extends pezyinterface with Logging{
     rs.close()
     statement.close()
     conn.close()
-
-  }
-
-  def executorDataforES():Unit={
-
 
   }
 
