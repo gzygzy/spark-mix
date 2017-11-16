@@ -34,6 +34,16 @@ class SqlPlus extends pezyinterface with Logging{
     val checkLicense = new CheckLicense
     val licenseResult = checkLicense.checkResult()
     /*sparkSession.sessionState.conf.setConfString("engine","phoenix")*/
+    val map = sparkSession.sqlContext.getAllConfs
+    val flag = map.keys.exists(fg =>
+    if(fg.toString == "fg"){
+      true
+    }else{
+      false
+    })
+    if (flag){
+      println(sparkSession.sqlContext.getConf("fg")+"===================")
+    }
 
     if(licenseResult.getResult == true) {
 
@@ -217,7 +227,7 @@ class SqlPlus extends pezyinterface with Logging{
         prop.setProperty("user",user)
         prop.setProperty("password",password)
 
-        val ff = if(!(par.get=="")){
+        val ff = if(!(par.get==" ")){
           sparkSession.sqlContext.read.jdbc(url,tName.get,part,prop)
         }else{
           sparkSession.sqlContext.read.format("jdbc").options(Map("url" -> url,"user" -> user,"password" -> password
